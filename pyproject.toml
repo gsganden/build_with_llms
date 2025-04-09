@@ -6,7 +6,11 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "accelerate",
+    "datasette>=0.65.1",
     "dotenv",
+    "google-genai>=1.10.0",
     "jupyter",
+    "pymupdf>=1.25.5",
+    "python-fasthtml>=0.12.12",
     "transformers",
 ]

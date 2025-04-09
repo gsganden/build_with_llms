@@ -8,4 +8,9 @@ Homework from [Building LLM Applications for Data Scientists and Software Engine
 uv sync
 ```
 
-Get a Huggingface token, put `export HF_token='<token_value>'` in a `.env` file in the repo root directory.
+Put in a `.env` file in the repo root directory:
+
+```bash
+export HF_token='<token_value>'
+export GOOGLE_API_KEY='<token_value>'
+```
