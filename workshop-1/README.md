@@ -1,3 +1,3 @@
 # Workshop 1 Homework
 
-Implementing the app without llama-index.
+Reimplementing the Workshop 1 app without llama-index.
