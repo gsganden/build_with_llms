@@ -13,6 +13,3 @@ View logs:
 ```bash
 datasette pdf_qa_logs.db
 ```
-
-The notebooks contain scratch work.
-
