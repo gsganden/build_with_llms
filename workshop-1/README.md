@@ -1,6 +1,6 @@
 # Workshop 1 Homework
 
-Reimplementing the Workshop 1 app without llama-index.
+Reimplementing the Workshop 1 app with `fasthtml` and without `llama-index`.
 
 Run the app:
 
