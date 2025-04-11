@@ -17,16 +17,16 @@ uv sync
 
 ## Commands
 
-Deploy the app on the Modal platform:
-
-```bash
-modal deploy src/deploy.py
-```
-
 Run the app locally via the `modal` library:
 
 ```bash
 modal serve src/deploy.py
+```
+
+Deploy the app on the Modal platform:
+
+```bash
+modal deploy src/deploy.py
 ```
 
 Run the app directly:

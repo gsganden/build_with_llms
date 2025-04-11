@@ -1,14 +1,11 @@
 import asyncio
 from datetime import datetime
-from dotenv import load_dotenv
 import sqlite3
 import uuid
 
 import fasthtml.common as fh
 from google import genai
 import fitz
-
-load_dotenv("../.env")
 
 app, rt = fh.fast_app()
 
