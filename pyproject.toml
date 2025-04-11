@@ -10,6 +10,7 @@ dependencies = [
     "dotenv",
     "google-genai>=1.10.0",
     "jupyter",
+    "modal>=0.73.164",
     "pymupdf>=1.25.5",
     "python-fasthtml>=0.12.12",
     "transformers",

@@ -1,19 +1,33 @@
 # HR App
 
-My own implementation of the HR app developed in the course (WIP).
+My own WIP implementation of the HR app developed in the course.
 
-Significant modifications:
+## Significant Modifications
 
 - Replaced `llama-index` with custom code for greater transparency and control.
 - Replaced `gradio` with `fasthtml` for more flexibility.
 
-Run the app:
+## Commands
+
+Deploy the app on the Modal platform:
+
+```bash
+modal deploy deploy.py
+```
+
+Run the app locally via the `modal` library:
+
+```bash
+modal serve deploy.py
+```
+
+Run the app directly:
 
 ```bash
 python main.py
 ```
 
-View logs:
+View local logs:
 
 ```bash
 datasette pdf_qa_logs.db

@@ -161,4 +161,5 @@ def create_prompt(query, pdf_text):
     """
 
 
-fh.serve(reload=True)
+if __name__ == "__main__":
+    fh.serve(reload=True)
