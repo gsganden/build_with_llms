@@ -16,5 +16,11 @@ dependencies = [
 dev = [
     "datasette>=0.65.1",
     "jupyter",
+    "pyright>=1.1.399",
     "ruff>=0.11.5",
 ]
+
+[tool.pyright]
+pythonVersion = "3.13"
+include = ["src"]
+exclude = ["**/__pycache__", ".venv"]
