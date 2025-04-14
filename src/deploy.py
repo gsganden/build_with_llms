@@ -1,11 +1,9 @@
 import os
 from pathlib import Path
 
-# hr_app/deploy.py
 import modal
 import logging
 
-# Configure basic logging for deployment script itself
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
@@ -25,7 +23,6 @@ def _get_python_version():
     return (project_root_active / PYTHON_VERSION_FILENAME).read_text().strip()
 
 
-# Define Modal Image with all dependencies from main.py
 image = (
     modal.Image.debian_slim()
     .pip_install("uv")
@@ -53,19 +50,15 @@ image = (
     )
 )
 
-# Define the Modal app container, referencing the image
 app = modal.App("pdf-qa-app-deployment", image=image)
 
 
-# --- Import the FastHTML app instance from main.py ---
-# This assumes main.py is in the same directory or Python path
 try:
     from main import app as pdf_qa_fasthtml_app
 
     logger.info("Successfully imported FastHTML app from main.py")
 except ImportError as e:
     logger.error(f"Failed to import app from main.py: {e}")
-    # Handle error - maybe raise, or define a fallback app
     pdf_qa_fasthtml_app = None
 
 
@@ -85,20 +78,17 @@ def serve_main_app():
     """
     logger.info("Serving the main PDF QA FastHTML app...")
     if pdf_qa_fasthtml_app is None:
-        # Handle case where import failed
         logger.error("Cannot serve: FastHTML app from main.py failed to import.")
-        # Optionally, return a simple error app here
         import fasthtml.common as fh
 
-        error_app, error_rt = fh.fast_app()  # Get app and route decorator
+        error_app, error_rt = fh.fast_app()
 
-        @error_rt("/")  # Use the route decorator associated with error_app
+        @error_rt("/")
         def error_route():
             return fh.H1("Error: Application failed to load.")
 
         return error_app
 
-    # --- Important Warnings for Modal Deployment ---
     logger.warning(
         "The underlying app in main.py uses a global dictionary (UPLOADS) for state."
     )
@@ -112,9 +102,6 @@ def serve_main_app():
     logger.warning(
         "This DB will be ephemeral unless a NetworkFileSystem is mounted at its location."
     )
-    # --- End Warnings ---
-
-    # Return the imported FastHTML app instance
     return pdf_qa_fasthtml_app
 
 
@@ -125,7 +112,6 @@ def main():
     if pdf_qa_fasthtml_app:
         logger.info("FastHTML app from main.py imported successfully.")
         try:
-            # Get the registered name of the serving function
             serve_func_name = serve_main_app.info.name
             print(f"To run locally: modal serve deploy.py::{serve_func_name}")
         except Exception:
