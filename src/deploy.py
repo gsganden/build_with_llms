@@ -14,15 +14,16 @@ logger = logging.getLogger("modal_deploy")
 PROJECT_ROOT_IN_CONTAINER = Path("/root/project")
 project_root_local = Path(__file__).resolve().parent.parent
 PYTHON_VERSION_FILENAME = ".python-version"
-project_root_active = (
-    PROJECT_ROOT_IN_CONTAINER
-    if PROJECT_ROOT_IN_CONTAINER.exists()
-    else project_root_local
-)
-python_version = (project_root_active / PYTHON_VERSION_FILENAME).read_text().strip()
-SITE_PACKAGES_IN_CONTAINER = (
-    PROJECT_ROOT_IN_CONTAINER / f".venv/lib/python{python_version}/site-packages"
-)
+
+
+def _get_python_version():
+    project_root_active = (
+        PROJECT_ROOT_IN_CONTAINER
+        if PROJECT_ROOT_IN_CONTAINER.exists()
+        else project_root_local
+    )
+    return (project_root_active / PYTHON_VERSION_FILENAME).read_text().strip()
+
 
 # Define Modal Image with all dependencies from main.py
 image = (
@@ -47,7 +48,7 @@ image = (
     .run_commands("uv sync --frozen --compile-bytecode")
     .env(
         {
-            "PYTHONPATH": f"{SITE_PACKAGES_IN_CONTAINER}:{os.environ.get('PYTHONPATH', '')}"
+            "PYTHONPATH": f".venv/lib/python{_get_python_version()}/site-packages:{os.environ.get('PYTHONPATH', '')}"
         }
     )
 )
