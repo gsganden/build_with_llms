@@ -16,4 +16,5 @@ dependencies = [
 dev = [
     "datasette>=0.65.1",
     "jupyter",
+    "ruff>=0.11.5",
 ]
