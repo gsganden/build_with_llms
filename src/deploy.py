@@ -1,3 +1,6 @@
+import os
+from pathlib import Path
+
 # hr_app/deploy.py
 import modal
 import logging
@@ -8,13 +11,45 @@ logging.basicConfig(
 )
 logger = logging.getLogger("modal_deploy")
 
+PROJECT_ROOT_IN_CONTAINER = Path("/root/project")
+project_root_local = Path(__file__).resolve().parent.parent
+PYTHON_VERSION_FILENAME = ".python-version"
+project_root_active = (
+    PROJECT_ROOT_IN_CONTAINER
+    if PROJECT_ROOT_IN_CONTAINER.exists()
+    else project_root_local
+)
+python_version = (project_root_active / PYTHON_VERSION_FILENAME).read_text().strip()
+SITE_PACKAGES_IN_CONTAINER = (
+    PROJECT_ROOT_IN_CONTAINER / f".venv/lib/python{python_version}/site-packages"
+)
 
 # Define Modal Image with all dependencies from main.py
-image = modal.Image.debian_slim().pip_install(
-    "dotenv",
-    "google-genai>=1.10.0",
-    "pymupdf>=1.25.5",
-    "python-fasthtml>=0.12.12",
+image = (
+    modal.Image.debian_slim()
+    .pip_install("uv")
+    .add_local_file(
+        local_path=str(project_root_local / "uv.lock"),
+        remote_path=str(PROJECT_ROOT_IN_CONTAINER / "uv.lock"),
+        copy=True,
+    )
+    .add_local_file(
+        local_path=str(project_root_local / "pyproject.toml"),
+        remote_path=str(PROJECT_ROOT_IN_CONTAINER / "pyproject.toml"),
+        copy=True,
+    )
+    .add_local_file(
+        local_path=str(project_root_local / PYTHON_VERSION_FILENAME),
+        remote_path=str(PROJECT_ROOT_IN_CONTAINER / PYTHON_VERSION_FILENAME),
+        copy=True,
+    )
+    .workdir(PROJECT_ROOT_IN_CONTAINER)
+    .run_commands("uv sync --frozen --compile-bytecode")
+    .env(
+        {
+            "PYTHONPATH": f"{SITE_PACKAGES_IN_CONTAINER}:{os.environ.get('PYTHONPATH', '')}"
+        }
+    )
 )
 
 # Define the Modal app container, referencing the image
