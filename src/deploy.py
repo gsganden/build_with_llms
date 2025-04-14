@@ -64,7 +64,7 @@ except ImportError as e:
 
 @app.function(
     allow_concurrent_inputs=1000,
-    secrets=[modal.Secret.from_name("llm-secrets")],  # Add Google API key secret
+    secrets=[modal.Secret.from_name("llm-secrets")],
     # WARNING: Concurrency limit might be needed if SQLite access isn't thread-safe
     # or if UPLOADS dict causes issues. Start without, add if necessary.
     # concurrency_limit=1,
