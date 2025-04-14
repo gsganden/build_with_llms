@@ -93,6 +93,6 @@ def main():
             serve_func_name = serve_main_app.info.name
             print(f"To run locally: modal serve deploy.py::{serve_func_name}")
         except Exception:
-            print(f"To run locally: modal serve deploy.py::serve_main_app")
+            print("To run locally: modal serve deploy.py::serve_main_app")
     else:
         logger.error("Could not import FastHTML app from main.py.")
