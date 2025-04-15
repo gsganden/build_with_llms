@@ -67,19 +67,6 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
     )
 
 
-def log_interaction(pdf_name, query, response):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    interaction_id = str(uuid.uuid4())
-    timestamp = datetime.now().isoformat()
-    c.execute(
-        "INSERT INTO interactions VALUES (?, ?, ?, ?, ?)",
-        (interaction_id, timestamp, pdf_name, query, response),
-    )
-    conn.commit()
-    conn.close()
-
-
 @rt
 async def answer_question(pdf_text: str, pdf_filename: str, query: str):
     answer = await get_answer(query, pdf_text)
@@ -117,6 +104,19 @@ def create_prompt(query, pdf_text):
 
     Please provide a clear and concise answer based only on the document content.
     """
+
+
+def log_interaction(pdf_name, query, response):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    interaction_id = str(uuid.uuid4())
+    timestamp = datetime.now().isoformat()
+    c.execute(
+        "INSERT INTO interactions VALUES (?, ?, ?, ?, ?)",
+        (interaction_id, timestamp, pdf_name, query, response),
+    )
+    conn.commit()
+    conn.close()
 
 
 if __name__ == "__main__":
