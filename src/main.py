@@ -11,6 +11,19 @@ from constants import DB_FILE
 
 app, rt = fh.fast_app()
 
+STYLE = fh.Style("""
+    .htmx-indicator{
+        opacity:0;
+        transition: opacity 200ms ease-in;
+    }
+    .htmx-request .htmx-indicator{
+        opacity:1
+    }
+    .htmx-request.htmx-indicator{
+        opacity:1
+    }
+""")
+
 
 def get_model_client():
     return genai.Client()
@@ -25,6 +38,7 @@ def get():
             fh.Form(hx_post=upload_pdf, hx_target="#result")(
                 fh.Input(type="file", name="pdf_file", accept="application/pdf"),
                 fh.Button("Upload PDF", type="submit", cls="primary"),
+                fh.Span("Uploading...", id="upload-indicator", cls="htmx-indicator"),
             ),
             fh.Div(id="result"),
         ),
@@ -54,6 +68,7 @@ async def upload_pdf(pdf_file: fh.UploadFile):
                 id="pdf-query",
             ),
             fh.Button("Submit Question", type="submit", cls="secondary"),
+            fh.Span("Thinking...", id="question-indicator", cls="htmx-indicator"),
         ),
         fh.Div(id="answers"),
     )
