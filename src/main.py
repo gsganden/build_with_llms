@@ -102,7 +102,6 @@ async def answer_question(pdf_text: str, pdf_filename: str, query: str):
         fh.P(query),
         fh.H4("Answer:"),
         fh.Div(
-            fh.P(cls="htmx-indicator"),
             id="answer-content",
             hx_ext="sse",
             sse_connect=sse_url,
@@ -110,7 +109,6 @@ async def answer_question(pdf_text: str, pdf_filename: str, query: str):
             sse_close="close",
             hx_swap="beforeend",
         ),
-        fh.P("Thinking...", cls="htmx-indicator", id="sse-indicator"),
     )
 
 
