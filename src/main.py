@@ -7,37 +7,14 @@ import fasthtml.common as fh
 from google import genai
 import fitz
 
+from constants import DB_FILE
+
 app, rt = fh.fast_app()
-
-DB_FILE = "pdf_qa_logs.db"
-
-
-def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute(
-        """
-        CREATE TABLE IF NOT EXISTS interactions (
-            id TEXT PRIMARY KEY,
-            timestamp TEXT,
-            pdf_name TEXT,
-            query TEXT,
-            response TEXT
-        )
-        """
-    )
-    conn.commit()
-    conn.close()
-
-
-init_db()
 
 
 def get_model_client():
     return genai.Client()
 
-
-MODEL_CLIENT = get_model_client()
 
 UPLOADS = {}
 
@@ -135,7 +112,7 @@ async def answer_question(pdf_id: str, query: str):
 async def get_answer(query, pdf_text):
     try:
         response = await asyncio.to_thread(
-            MODEL_CLIENT.models.generate_content,
+            get_model_client().models.generate_content,
             model="gemini-2.0-flash",
             contents=create_prompt(query, pdf_text),
         )

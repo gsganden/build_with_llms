@@ -1,8 +1,16 @@
 import os
 from pathlib import Path
+import sqlite3
 
 import modal
 import logging
+
+from constants import DATA_DIR_IN_CONTAINER, DB_FILE
+
+NFS = modal.NetworkFileSystem.from_name(
+    "pdf-qa-nfs",
+    create_if_missing=True,
+)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -62,15 +70,32 @@ except ImportError as e:
     pdf_qa_fasthtml_app = None
 
 
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute(
+        """
+        CREATE TABLE IF NOT EXISTS interactions (
+            id TEXT PRIMARY KEY,
+            timestamp TEXT,
+            pdf_name TEXT,
+            query TEXT,
+            response TEXT
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
 @app.function(
-    allow_concurrent_inputs=1000,
     secrets=[modal.Secret.from_name("llm-secrets")],
+    network_file_systems={str(DATA_DIR_IN_CONTAINER): NFS},
     # WARNING: Concurrency limit might be needed if SQLite access isn't thread-safe
     # or if UPLOADS dict causes issues. Start without, add if necessary.
     # concurrency_limit=1,
-    # Add Network File System if you want to persist SQLite DB or uploads
-    # network_file_systems={"/data": modal.NetworkFileSystem.from_name("my-pdf-qa-nfs")}
 )
+@modal.concurrent(1000)
 @modal.asgi_app()
 def serve_main_app():
     """
@@ -98,10 +123,8 @@ def serve_main_app():
     logger.warning(
         "Consider using modal.Dict, NetworkFileSystem, or an external database for state."
     )
-    logger.warning("The app also uses a local SQLite DB (pdf_qa_logs.db).")
-    logger.warning(
-        "This DB will be ephemeral unless a NetworkFileSystem is mounted at its location."
-    )
+    DATA_DIR_IN_CONTAINER.mkdir(parents=True, exist_ok=True)
+    init_db()
     return pdf_qa_fasthtml_app
 
 
@@ -118,3 +141,36 @@ def main():
             print("To run locally: modal serve deploy.py::serve_main_app")
     else:
         logger.error("Could not import FastHTML app from main.py.")
+
+
+@app.function(
+    image=image,
+    network_file_systems={str(DATA_DIR_IN_CONTAINER): NFS},
+)
+@modal.asgi_app()
+def serve_datasette():
+    """Serves the Datasette UI for browsing the interactions database."""
+    from datasette.app import Datasette
+
+    db_path = Path(DATA_DIR_IN_CONTAINER) / DB_FILE
+
+    if not db_path.exists():
+        logger.error(f"Database file {db_path} not found in NFS for Datasette.")
+        from fasthtml.common import fast_app, H1
+
+        error_app, rt = fast_app()
+
+        @rt("/")
+        def error():
+            return H1("Error: Database file not found.")
+
+        return error_app
+
+    logger.info(f"Starting Datasette for {db_path}")
+    ds = Datasette(
+        files=[db_path],
+        settings={
+            "sql_time_limit_ms": 5000  # Example setting: Limit query time
+        },
+    )
+    return ds.app()

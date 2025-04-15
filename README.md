@@ -28,15 +28,3 @@ Deploy the app on the Modal platform:
 ```bash
 modal deploy src/deploy.py
 ```
-
-Run the app directly:
-
-```bash
-python src/main.py
-```
-
-View local logs:
-
-```bash
-datasette src/pdf_qa_logs.db
-```
