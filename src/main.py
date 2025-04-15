@@ -1,6 +1,8 @@
 import asyncio
 from datetime import datetime
+import logging
 import sqlite3
+import urllib
 import uuid
 
 import fasthtml.common as fh
@@ -9,7 +11,10 @@ import fitz
 
 from constants import DB_FILE
 
-app, rt = fh.fast_app()
+# Supports streaming model responses
+SSE_HDR = fh.Script(src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js")
+
+app, rt = fh.fast_app(hdrs=(SSE_HDR,))
 
 STYLE = fh.Style("""
     .htmx-indicator{
@@ -23,6 +28,8 @@ STYLE = fh.Style("""
         opacity:1
     }
 """)
+
+logger = logging.getLogger(__name__)
 
 
 def get_model_client():
@@ -84,30 +91,73 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
 
 @rt
 async def answer_question(pdf_text: str, pdf_filename: str, query: str):
-    answer = await get_answer(query, pdf_text)
+    encoded_query = urllib.parse.quote(query)
+    encoded_pdf_text = urllib.parse.quote(pdf_text)
+    encoded_pdf_filename = urllib.parse.quote(pdf_filename)
 
-    log_interaction(pdf_filename, query, answer["text"])
-    return fh.Article(
+    sse_url = f"/answer-stream?query={encoded_query}&pdf_text={encoded_pdf_text}&pdf_filename={encoded_pdf_filename}"
+
+    return fh.Div(
         fh.H4("Question:"),
         fh.P(query),
         fh.H4("Answer:"),
-        fh.P(answer["text"]),
+        fh.Div(
+            fh.P(cls="htmx-indicator"),
+            id="answer-content",
+            hx_ext="sse",
+            sse_connect=sse_url,
+            sse_swap="message",
+            sse_close="close",
+            hx_swap="beforeend",
+        ),
+        fh.P("Thinking...", cls="htmx-indicator", id="sse-indicator"),
     )
 
 
+@rt("/answer-stream")
+async def answer_stream(query: str, pdf_text: str, pdf_filename: str):
+    accumulated_response_for_log = ""
+
+    async def event_generator():
+        nonlocal accumulated_response_for_log
+        try:
+            async for chunk in get_answer(query, pdf_text):
+                if chunk:
+                    accumulated_response_for_log += chunk
+                    yield fh.sse_message(chunk)
+                    await asyncio.sleep(0.01)
+                else:
+                    logger.warning(">>> Received empty chunk, skipping.")
+        finally:
+            if accumulated_response_for_log:
+                if not accumulated_response_for_log.startswith(
+                    "Error during LLM generation:"
+                ):
+                    log_interaction(pdf_filename, query, accumulated_response_for_log)
+            yield "event: close\ndata: \n\n"
+
+    return fh.EventStream(event_generator())
+
+
 async def get_answer(query, pdf_text):
+    logger.info(">>> Inside get_answer")
     try:
-        response = await asyncio.to_thread(
-            get_model_client().models.generate_content,
+        model_client = get_model_client()
+        response_stream = model_client.models.generate_content_stream(
             model="gemini-2.0-flash",
             contents=create_prompt(query, pdf_text),
         )
-        return {
-            "success": True,
-            "text": response.text,
-        }
+        logger.info(">>> Got response_stream object")
+        for chunk in response_stream:
+            logger.info(f">>> Processing chunk in get_answer: {hasattr(chunk, 'text')}")
+            if hasattr(chunk, "text") and chunk.text:
+                yield chunk.text
+            else:
+                logger.warning(">>> Chunk received without text or empty text.")
+
     except Exception as e:
-        return {"success": False, "text": str(e)}
+        logger.error(f"!!! Error during LLM call in get_answer: {e}", exc_info=True)
+        yield f"Error during LLM generation: {e}"
 
 
 def create_prompt(query, pdf_text):
@@ -135,4 +185,4 @@ def log_interaction(pdf_name, query, response):
 
 
 if __name__ == "__main__":
-    fh.serve(reload=True)
+    fh.serve()
