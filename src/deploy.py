@@ -114,15 +114,6 @@ def serve_main_app():
 
         return error_app
 
-    logger.warning(
-        "The underlying app in main.py uses a global dictionary (UPLOADS) for state."
-    )
-    logger.warning(
-        "This WILL NOT work correctly with multiple Modal replicas and state will be lost."
-    )
-    logger.warning(
-        "Consider using modal.Dict, NetworkFileSystem, or an external database for state."
-    )
     DATA_DIR_IN_CONTAINER.mkdir(parents=True, exist_ok=True)
     init_db()
     return pdf_qa_fasthtml_app

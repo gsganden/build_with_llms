@@ -16,9 +16,6 @@ def get_model_client():
     return genai.Client()
 
 
-UPLOADS = {}
-
-
 @rt("/")
 def get():
     return fh.Titled(
@@ -36,28 +33,20 @@ def get():
 
 @rt
 async def upload_pdf(pdf_file: fh.UploadFile):
-    if pdf_file.content_type != "application/pdf":
-        return "Please upload a PDF file"
-
-    pdf_id = str(uuid.uuid4())
+    if not pdf_file or pdf_file.content_type != "application/pdf":
+        return fh.P("Please upload a valid PDF file", role="alert")
 
     pdf_binary = await pdf_file.read()
-
-    pdf_info = {
-        "filename": pdf_file.filename,
-        "size_bytes": len(pdf_binary),
-        "content_type": pdf_file.content_type,
-        "text": extract_text_from_pdf(pdf_binary),
-    }
-    UPLOADS[pdf_id] = pdf_info
+    pdf_text = extract_text_from_pdf(pdf_binary)
 
     return fh.Article(
-        fh.H3(f"PDF Uploaded: {pdf_info['filename']}"),
-        fh.P(f"Size: {pdf_info['size_bytes']} bytes"),
+        fh.H3(f"PDF Uploaded: {pdf_file.filename}"),
+        fh.P(f"Size: {len(pdf_binary)} bytes"),
         fh.Hr(),
         fh.H3("Ask questions about this PDF:"),
         fh.Form(hx_post=answer_question, hx_target="#answers")(
-            fh.Hidden(value=pdf_id, name="pdf_id"),
+            fh.Hidden(value=pdf_text, name="pdf_text"),
+            fh.Hidden(value=pdf_file.filename, name="pdf_filename"),
             fh.Textarea(
                 name="query",
                 placeholder="Ask a question about the PDF...",
@@ -92,15 +81,10 @@ def log_interaction(pdf_name, query, response):
 
 
 @rt
-async def answer_question(pdf_id: str, query: str):
-    pdf_info = UPLOADS.get(pdf_id)
+async def answer_question(pdf_text: str, pdf_filename: str, query: str):
+    answer = await get_answer(query, pdf_text)
 
-    if not pdf_info:
-        return fh.Article(fh.P("PDF not found.", cls="error"))
-
-    answer = await get_answer(query, pdf_info["text"])
-
-    log_interaction(pdf_info["filename"], query, answer["text"])
+    log_interaction(pdf_filename, query, answer["text"])
     return fh.Article(
         fh.H4("Question:"),
         fh.P(query),
