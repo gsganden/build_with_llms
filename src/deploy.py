@@ -95,7 +95,7 @@ def init_db():
     # or if UPLOADS dict causes issues. Start without, add if necessary.
     # concurrency_limit=1,
 )
-@modal.concurrent(1000)
+@modal.concurrent(max_inputs=1000)
 @modal.asgi_app()
 def serve_main_app():
     """
