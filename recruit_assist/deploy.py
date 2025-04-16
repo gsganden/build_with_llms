@@ -61,7 +61,7 @@ app = modal.App("pdf-qa-app-deployment", image=image)
 
 
 try:
-    from main import app as pdf_qa_fasthtml_app
+    from recruit_assist.main import app as pdf_qa_fasthtml_app
 
     logger.info("Successfully imported FastHTML app from main.py")
 except ImportError as e:
