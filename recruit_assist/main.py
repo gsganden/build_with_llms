@@ -10,7 +10,7 @@ import fasthtml.common as fh
 from google import genai
 import fitz
 
-from constants import DB_FILE
+from recruit_assist.constants import DB_FILE
 
 # Supports streaming model responses
 SSE_HDR = fh.Script(src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js")

@@ -1,5 +1,5 @@
 [project]
-name = "build-with-llms"
+name = "recruit_assist"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -18,7 +18,13 @@ dev = [
     "jupyter",
     "pyright>=1.1.399",
     "ruff>=0.11.5",
+    "pytest",
+    "httpx",
+    "pytest-anyio",
 ]
+
+[tool.uv]
+package = true
 
 [tool.pyright]
 pythonVersion = "3.13"

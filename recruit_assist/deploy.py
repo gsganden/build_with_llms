@@ -5,7 +5,7 @@ import sqlite3
 import modal
 import logging
 
-from constants import DATA_DIR_IN_CONTAINER, DB_FILE
+from recruit_assist.constants import DATA_DIR_IN_CONTAINER, DB_FILE
 
 NFS = modal.NetworkFileSystem.from_name(
     "pdf-qa-nfs",
