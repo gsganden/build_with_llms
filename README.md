@@ -1,11 +1,6 @@
 # Recruiter Assistant
 
-My implementation of a recruiter assistant app, developed in [Building LLM Applications for Data Scientists and Software Engineers](https://maven.com/hugo-stefan/building-llm-apps-ds-and-swe-from-first-principles), cohort 2 (April 7 - May 3, 2025). Published with permission from the course instructors.
-
-## Significant Modifications
-
-- Replaced `llama-index` with custom code for greater transparency and control.
-- Replaced `gradio` with `fasthtml` for more flexibility.
+Recruiter assistant app, developed in [Building LLM Applications for Data Scientists and Software Engineers](https://maven.com/hugo-stefan/building-llm-apps-ds-and-swe-from-first-principles), cohort 2 (April 7 - May 3, 2025). Published with permission from the course instructors.
 
 ## Setup
 
