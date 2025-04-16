@@ -166,7 +166,7 @@ async def answer_stream(query: str, pdf_id: str, pdf_filename: str):
                 return
         except sqlite3.Error as e:
             logger.error("SQLite error retrieving text for ID %s: %s", pdf_id, e)
-            yield fh.sse_error(f"Error retrieving PDF text from database")
+            yield fh.sse_error("Error retrieving PDF text from database")
             return  # Exit generation on DB error
         finally:
             if conn is not None:
