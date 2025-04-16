@@ -150,7 +150,7 @@ def main():
     image=image,
     network_file_systems={str(DATA_DIR_IN_CONTAINER): NFS},
 )
-@modal.asgi_app()
+@modal.asgi_app(requires_proxy_auth=True)
 def serve_datasette():
     """Serves the Datasette UI for browsing the interactions database."""
     from datasette.app import Datasette
