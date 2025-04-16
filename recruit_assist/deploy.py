@@ -23,12 +23,11 @@ PYTHON_VERSION_FILENAME = ".python-version"
 
 
 def _get_python_version():
-    project_root_active = (
-        PROJECT_ROOT_IN_CONTAINER
-        if PROJECT_ROOT_IN_CONTAINER.exists()
-        else project_root_local
-    )
-    return (project_root_active / PYTHON_VERSION_FILENAME).read_text().strip()
+    this_file_dir = Path(__file__).resolve().parent
+    try:
+        return (this_file_dir.parent / PYTHON_VERSION_FILENAME).read_text().strip()
+    except FileNotFoundError:
+        return (this_file_dir / PYTHON_VERSION_FILENAME).read_text().strip()
 
 
 image = (
