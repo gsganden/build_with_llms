@@ -89,4 +89,4 @@ jobs:
         MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
       run: |
         source .venv/bin/activate
-        modal deploy src/deploy.py 
+        modal deploy recruit_assist/deploy.py 
