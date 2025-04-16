@@ -13,3 +13,4 @@ wheels/
 **/.sesskey
 **/*.db
 **/scratch
+.vscode
