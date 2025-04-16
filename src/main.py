@@ -42,7 +42,7 @@ def get():
     return fh.Titled(
         "Ask AI about a PDF",
         fh.Article(
-            fh.H3("Step 1: Upload a PDF"),
+            fh.H3("Upload a PDF"),
             fh.Form(hx_post=upload_pdf, hx_target="#result")(
                 fh.Input(type="file", name="pdf_file", accept="application/pdf"),
                 fh.Button("Upload PDF", type="submit", cls="primary"),
@@ -62,22 +62,32 @@ async def upload_pdf(pdf_file: fh.UploadFile):
 
     pdf_hash = hashlib.sha256(pdf_binary).digest()
     pdf_id = str(uuid.UUID(bytes=pdf_hash[:16]))
-    logger.info("Generated PDF ID %s", {pdf_id})
+    logger.info("Generated PDF ID %s", pdf_id)
 
-    if not hasattr(app, "pdf_texts"):
-        logger.error(
-            "Modal Dict attribute `pdf_texts` not set on app. Cannot store PDF text."
-        )
-        return fh.P("Error: PDF storage mechanism not available.", role="alert")
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
 
-    if pdf_id in app.pdf_texts:
-        logger.info("Cache hit: Found existing text for PDF ID %s", pdf_id)
-    else:
-        logger.info("Cache miss: Extracting text for new PDF ID %s", pdf_id)
-        app.pdf_texts[pdf_id] = extract_text_from_pdf(pdf_binary)
-        logger.info("Stored newly extracted PDF text with ID %s", pdf_id)
+        c.execute("SELECT 1 FROM pdfs WHERE id = ?", (pdf_id,))
+        exists = c.fetchone()
 
-    logger.info("Stored PDF text with ID %s", pdf_id)
+        if exists:
+            logger.info("Cache hit: Found existing text for PDF ID %s in DB", pdf_id)
+        else:
+            logger.info("Cache miss: Extracting text for new PDF ID %s", pdf_id)
+            c.execute(
+                "INSERT INTO pdfs (id, filename, text) VALUES (?, ?, ?)",
+                (pdf_id, pdf_file.filename, extract_text_from_pdf(pdf_binary)),
+            )
+            conn.commit()
+            logger.info("Stored newly extracted PDF text with ID %s in DB", pdf_id)
+    except sqlite3.Error as e:
+        logger.error("SQLite error during PDF upload/check for ID %s: %s", pdf_id, e)
+        conn.rollback()
+        return fh.P("Error processing PDF", role="alert")
+    finally:
+        if conn:
+            conn.close()
 
     return fh.Article(
         fh.H3(f"PDF Uploaded: {pdf_file.filename}"),
@@ -137,34 +147,48 @@ async def answer_stream(query: str, pdf_id: str, pdf_filename: str):
 
     async def event_generator():
         nonlocal accumulated_response_for_log
+        pdf_text = None
+        conn = None
         try:
-            if not hasattr(app, "pdf_texts"):
-                logger.error("Modal Dict not available. Cannot retrieve PDF text.")
-                yield fh.sse_message("Error: PDF text retrieval failed.")
-                return
-            try:
-                pdf_text = app.pdf_texts[pdf_id]
-                logger.info("Retrieved PDF text for ID: %s", pdf_id)
-            except KeyError:
-                logger.error("Text ID not found in Modal Dict: %s", pdf_id)
+            conn = sqlite3.connect(DB_FILE)
+            c = conn.cursor()
+            c.execute("SELECT text FROM pdfs WHERE id = ?", (pdf_id,))
+            result = c.fetchone()
+
+            if result:
+                pdf_text = result[0]
+                logger.info("Retrieved PDF text from DB for ID: %s", pdf_id)
+            else:
+                logger.error("PDF text not found in DB for ID: %s", pdf_id)
                 yield fh.sse_error(
-                    "Error: Could not find PDF text associated with this session."
+                    "Error: Could not find PDF text associated with this session in the database."
                 )
                 return
-
-            async for chunk in get_answer(query, pdf_text):
-                if chunk:
-                    accumulated_response_for_log += chunk
-                    yield fh.sse_message(chunk)
-                    await asyncio.sleep(0.01)
-                else:
-                    logger.warning("Received empty chunk, skipping.")
+        except sqlite3.Error as e:
+            logger.error("SQLite error retrieving text for ID %s: %s", pdf_id, e)
+            yield fh.sse_error(f"Error retrieving PDF text from database")
+            return  # Exit generation on DB error
         finally:
-            if accumulated_response_for_log:
-                if not accumulated_response_for_log.startswith(
-                    "Error during LLM generation:"
-                ) and not accumulated_response_for_log.startswith("Error:"):
-                    log_interaction(pdf_filename, query, accumulated_response_for_log)
+            if conn is not None:
+                conn.close()
+
+        if pdf_text is not None:
+            try:
+                async for chunk in get_answer(query, pdf_text):
+                    if chunk:
+                        accumulated_response_for_log += chunk
+                        yield fh.sse_message(chunk)
+                        await asyncio.sleep(0.01)
+                    else:
+                        logger.warning("Received empty chunk, skipping.")
+            finally:
+                if accumulated_response_for_log:
+                    if not accumulated_response_for_log.startswith(
+                        "Error during LLM generation:"
+                    ) and not accumulated_response_for_log.startswith("Error:"):
+                        log_interaction(pdf_id, query, accumulated_response_for_log)
+                yield "event: close\ndata: \n\n"
+        else:
             yield "event: close\ndata: \n\n"
 
     return fh.EventStream(event_generator())
@@ -187,8 +211,8 @@ async def get_answer(query, pdf_text):
                 logger.warning("Chunk received without text or empty text.")
 
     except Exception as e:
-        logger.error(f"!!! Error during LLM call in get_answer: {e}", exc_info=True)
-        yield f"Error during LLM generation: {e}"
+        logger.error("!!! Error during LLM call in get_answer: %s", e, exc_info=True)
+        yield "Error during LLM generation"
 
 
 def create_prompt(query, pdf_text):
@@ -202,14 +226,21 @@ def create_prompt(query, pdf_text):
     """
 
 
-def log_interaction(pdf_name, query, response):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    interaction_id = str(uuid.uuid4())
-    timestamp = datetime.now().isoformat()
-    c.execute(
-        "INSERT INTO interactions VALUES (?, ?, ?, ?, ?)",
-        (interaction_id, timestamp, pdf_name, query, response),
-    )
-    conn.commit()
-    conn.close()
+def log_interaction(pdf_id, query, response):
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        interaction_id = str(uuid.uuid4())
+        timestamp = datetime.now().isoformat()
+        c.execute(
+            "INSERT INTO interactions VALUES (?, ?, ?, ?, ?)",
+            (interaction_id, timestamp, pdf_id, query, response),
+        )
+        conn.commit()
+    except sqlite3.Error as e:
+        logger.error("SQLite error logging interaction for PDF ID %s: %s", pdf_id, e)
+        if conn:
+            conn.rollback()  # Rollback on error
+    finally:
+        if conn:
+            conn.close()
