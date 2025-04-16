@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime
+import hashlib
 import logging
 import sqlite3
 import urllib
@@ -58,7 +59,25 @@ async def upload_pdf(pdf_file: fh.UploadFile):
         return fh.P("Please upload a valid PDF file", role="alert")
 
     pdf_binary = await pdf_file.read()
-    pdf_text = extract_text_from_pdf(pdf_binary)
+
+    pdf_hash = hashlib.sha256(pdf_binary).digest()
+    pdf_id = str(uuid.UUID(bytes=pdf_hash[:16]))
+    logger.info("Generated PDF ID %s", {pdf_id})
+
+    if not hasattr(app, "pdf_texts"):
+        logger.error(
+            "Modal Dict attribute `pdf_texts` not set on app. Cannot store PDF text."
+        )
+        return fh.P("Error: PDF storage mechanism not available.", role="alert")
+
+    if pdf_id in app.pdf_texts:
+        logger.info("Cache hit: Found existing text for PDF ID %s", pdf_id)
+    else:
+        logger.info("Cache miss: Extracting text for new PDF ID %s", pdf_id)
+        app.pdf_texts[pdf_id] = extract_text_from_pdf(pdf_binary)
+        logger.info("Stored newly extracted PDF text with ID %s", pdf_id)
+
+    logger.info("Stored PDF text with ID %s", pdf_id)
 
     return fh.Article(
         fh.H3(f"PDF Uploaded: {pdf_file.filename}"),
@@ -66,7 +85,7 @@ async def upload_pdf(pdf_file: fh.UploadFile):
         fh.Hr(),
         fh.H3("Ask questions about this PDF:"),
         fh.Form(hx_post=answer_question, hx_target="#answers")(
-            fh.Hidden(value=pdf_text, name="pdf_text"),
+            fh.Hidden(value=pdf_id, name="pdf_id"),
             fh.Hidden(value=pdf_file.filename, name="pdf_filename"),
             fh.Textarea(
                 name="query",
@@ -90,12 +109,12 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
 
 
 @rt
-async def answer_question(pdf_text: str, pdf_filename: str, query: str):
+async def answer_question(pdf_id: str, pdf_filename: str, query: str):
     encoded_query = urllib.parse.quote(query)
-    encoded_pdf_text = urllib.parse.quote(pdf_text)
+    encoded_pdf_id = urllib.parse.quote(pdf_id)
     encoded_pdf_filename = urllib.parse.quote(pdf_filename)
 
-    sse_url = f"/answer-stream?query={encoded_query}&pdf_text={encoded_pdf_text}&pdf_filename={encoded_pdf_filename}"
+    sse_url = f"/answer-stream?query={encoded_query}&pdf_id={encoded_pdf_id}&pdf_filename={encoded_pdf_filename}"
 
     return fh.Div(
         fh.H4("Question:"),
@@ -113,24 +132,38 @@ async def answer_question(pdf_text: str, pdf_filename: str, query: str):
 
 
 @rt("/answer-stream")
-async def answer_stream(query: str, pdf_text: str, pdf_filename: str):
+async def answer_stream(query: str, pdf_id: str, pdf_filename: str):
     accumulated_response_for_log = ""
 
     async def event_generator():
         nonlocal accumulated_response_for_log
         try:
+            if not hasattr(app, "pdf_texts"):
+                logger.error("Modal Dict not available. Cannot retrieve PDF text.")
+                yield fh.sse_message("Error: PDF text retrieval failed.")
+                return
+            try:
+                pdf_text = app.pdf_texts[pdf_id]
+                logger.info("Retrieved PDF text for ID: %s", pdf_id)
+            except KeyError:
+                logger.error("Text ID not found in Modal Dict: %s", pdf_id)
+                yield fh.sse_error(
+                    "Error: Could not find PDF text associated with this session."
+                )
+                return
+
             async for chunk in get_answer(query, pdf_text):
                 if chunk:
                     accumulated_response_for_log += chunk
                     yield fh.sse_message(chunk)
                     await asyncio.sleep(0.01)
                 else:
-                    logger.warning(">>> Received empty chunk, skipping.")
+                    logger.warning("Received empty chunk, skipping.")
         finally:
             if accumulated_response_for_log:
                 if not accumulated_response_for_log.startswith(
                     "Error during LLM generation:"
-                ):
+                ) and not accumulated_response_for_log.startswith("Error:"):
                     log_interaction(pdf_filename, query, accumulated_response_for_log)
             yield "event: close\ndata: \n\n"
 
@@ -138,20 +171,20 @@ async def answer_stream(query: str, pdf_text: str, pdf_filename: str):
 
 
 async def get_answer(query, pdf_text):
-    logger.info(">>> Inside get_answer")
+    logger.info("Inside get_answer")
     try:
         model_client = get_model_client()
         response_stream = model_client.models.generate_content_stream(
             model="gemini-2.0-flash",
             contents=create_prompt(query, pdf_text),
         )
-        logger.info(">>> Got response_stream object")
+        logger.info("Got response_stream object")
         for chunk in response_stream:
-            logger.info(f">>> Processing chunk in get_answer: {hasattr(chunk, 'text')}")
+            logger.info(f"Processing chunk in get_answer: {hasattr(chunk, 'text')}")
             if hasattr(chunk, "text") and chunk.text:
                 yield chunk.text
             else:
-                logger.warning(">>> Chunk received without text or empty text.")
+                logger.warning("Chunk received without text or empty text.")
 
     except Exception as e:
         logger.error(f"!!! Error during LLM call in get_answer: {e}", exc_info=True)
@@ -180,7 +213,3 @@ def log_interaction(pdf_name, query, response):
     )
     conn.commit()
     conn.close()
-
-
-if __name__ == "__main__":
-    fh.serve()

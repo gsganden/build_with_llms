@@ -12,6 +12,8 @@ NFS = modal.NetworkFileSystem.from_name(
     create_if_missing=True,
 )
 
+pdf_texts = modal.Dict.from_name("pdf-texts-dict", create_if_missing=True)
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
@@ -91,6 +93,7 @@ def init_db():
 @app.function(
     secrets=[modal.Secret.from_name("llm-secrets")],
     network_file_systems={str(DATA_DIR_IN_CONTAINER): NFS},
+    mounts=[modal.Mount.from_local_python_packages("main")],
     # WARNING: Concurrency limit might be needed if SQLite access isn't thread-safe
     # or if UPLOADS dict causes issues. Start without, add if necessary.
     # concurrency_limit=1,
@@ -116,6 +119,8 @@ def serve_main_app():
 
     DATA_DIR_IN_CONTAINER.mkdir(parents=True, exist_ok=True)
     init_db()
+    pdf_qa_fasthtml_app.pdf_texts = pdf_texts
+    logging.info("Serving the main PDF QA FastHTML app...")
     return pdf_qa_fasthtml_app
 
 
