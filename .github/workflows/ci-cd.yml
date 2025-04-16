@@ -1,0 +1,92 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Read .python-version
+      id: python-version
+      run: echo "version=$(cat .python-version)" >> $GITHUB_OUTPUT
+
+    - name: Set up Python ${{ steps.python-version.outputs.version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ steps.python-version.outputs.version }}
+
+    - name: Install uv
+      run: pip install uv
+
+    - name: Cache uv virtual environment
+      uses: actions/cache@v4
+      with:
+        path: .venv
+        key: ${{ runner.os }}-python-${{ steps.python-version.outputs.version }}-uv-${{ hashFiles('uv.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-python-${{ steps.python-version.outputs.version }}-uv-
+
+    - name: Install dependencies
+      run: uv sync --frozen --compile-bytecode
+
+    - name: Run Ruff Formatter Check
+      run: |
+        source .venv/bin/activate
+        ruff format --check .
+
+    - name: Run Ruff Linter
+      run: |
+        source .venv/bin/activate
+        ruff check .
+
+    - name: Run Pytest
+      run: |
+        source .venv/bin/activate
+        pytest
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    # Only run on pushes to main, not on PRs
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Read .python-version
+      id: python-version
+      run: echo "version=$(cat .python-version)" >> $GITHUB_OUTPUT
+
+    - name: Set up Python ${{ steps.python-version.outputs.version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ steps.python-version.outputs.version }}
+
+    - name: Install uv
+      run: pip install uv
+
+    - name: Cache uv virtual environment
+      uses: actions/cache@v4
+      with:
+        path: .venv
+        key: ${{ runner.os }}-python-${{ steps.python-version.outputs.version }}-uv-${{ hashFiles('uv.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-python-${{ steps.python-version.outputs.version }}-uv-
+
+    - name: Install dependencies
+      run: uv sync --frozen --compile-bytecode
+
+    - name: Deploy to Modal
+      env:
+        MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+        MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      run: |
+        source .venv/bin/activate
+        modal deploy src/deploy.py 
